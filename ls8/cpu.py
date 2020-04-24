@@ -27,6 +27,8 @@ DEC = 0b01100110
 
 PUSH = 0b01000101
 POP = 0b01000110
+CALL = 0b01010000
+RET = 0b00010001
 
 
 class CPU:
@@ -45,6 +47,8 @@ class CPU:
         self.branchtable[MUL] = self.handle_MUL
         self.branchtable[LDI] = self.handle_LDI
         self.branchtable[PRN] = self.handle_PRN
+        self.branchtable[CALL] = self.handle_CALL
+        self.branchtable[RET] = self.handle_RET
 
 # Inside the CPU, there are two internal registers used for memory operations: the Memory Address Register (MAR) and the Memory Data Register (MDR). The MAR contains the address that is being read or written to. The MDR contains the data that was read or the data to write. You don't need to add the MAR or MDR to your CPU class, but they would make handy paramter names for ram_read() and ram_write(), if you wanted.
 
@@ -135,16 +139,34 @@ class CPU:
     def handle_PRN(self, operand_a, _):
         print(self.reg[operand_a])
 
+    def handle_ADD(self, operand_a, operand_b):
+        self.alu("ADD", operand_a, operand_b)
+
     def handle_MUL(self, operand_a, operand_b):
         self.alu(MUL, operand_a, operand_b)
 
     def handle_PUSH(self, operand_a, _):
+        # you're moving down the stack, pushing the value into the next register. so F4 would go to F3
         self.reg[self.stack_pointer] -= 1
         self.ram[self.reg[self.stack_pointer]] = self.reg[operand_a]
 
     def handle_POP(self, operand_a, __):
+        # you're moving up the stack, popping the value into the next register. so F4 would go to F3
         self.reg[operand_a] = self.ram[self.reg[self.stack_pointer]]
         self.reg[self.stack_pointer] += 1
+
+    def handle_CALL(self, operand_a, _):
+        return_addr = self.pc + 2
+        self.reg[self.stack_pointer] -= 1
+        self.ram[self.reg[self.stack_pointer]] = return_addr
+
+        dest_addr = self.reg[operand_a]
+        self.pc = dest_addr
+
+    def handle_RET(self, _, __):
+        register = 0
+        self.handle_POP(register, __)
+        self.pc = self.reg[register]
 
     def run(self):
         """Run the CPU."""
@@ -154,6 +176,9 @@ class CPU:
             opcode = self.ram_read(self.pc)
 
             inst_len = ((opcode & 0b11000000) >> 6) + 1
+            # returns true if IR will modify pc
+            incr_pc = (opcode & 0b10000) >> 4
+            # print((opcode & 0b11000000), inst_len)
 
             operand_a = self.ram_read(self.pc + 1)
             operand_b = self.ram_read(self.pc + 2)
@@ -166,4 +191,5 @@ class CPU:
             except:
                 print(f"Did not work")
 
-            self.pc += inst_len
+            if not incr_pc == 1:
+                self.pc += inst_len
