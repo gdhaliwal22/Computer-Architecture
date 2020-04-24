@@ -30,6 +30,11 @@ POP = 0b01000110
 CALL = 0b01010000
 RET = 0b00010001
 
+CMP = 0b10100111
+JMP = 0b01010100
+JNE = 0b01010110
+JEQ = 0b01010101
+
 
 class CPU:
     """Main CPU class."""
@@ -37,6 +42,11 @@ class CPU:
     def __init__(self):
         """Construct a new CPU."""
         self.pc = 0
+        self.running = False
+        self.fl = [0] * 8
+        self.fl_lt = 5
+        self.fl_gt = 6
+        self.fl_equal = 7
         self.reg = [0] * 8
         self.ram = [0] * 256
         self.stack_pointer = 7
@@ -50,7 +60,15 @@ class CPU:
         self.branchtable[CALL] = self.handle_CALL
         self.branchtable[RET] = self.handle_RET
 
+        # Sprint challenge: add CMP, JMP, JEQ and JNE
+        self.branchtable[CMP] = self.handle_CMP
+        self.branchtable[JMP] = self.handle_JMP
+        self.branchtable[JEQ] = self.handle_JEQ
+        self.branchtable[JNE] = self.handle_JNE
+
+
 # Inside the CPU, there are two internal registers used for memory operations: the Memory Address Register (MAR) and the Memory Data Register (MDR). The MAR contains the address that is being read or written to. The MDR contains the data that was read or the data to write. You don't need to add the MAR or MDR to your CPU class, but they would make handy paramter names for ram_read() and ram_write(), if you wanted.
+
 
     def ram_read(self, mar):
         mdr = self.ram[mar]
@@ -110,6 +128,20 @@ class CPU:
         elif op == MUL:
             self.reg[reg_a] *= self.reg[reg_b]
         # elif op == "SUB": etc
+        elif op == CMP:
+            if self.reg[reg_a] == self.reg[reg_b]:
+                self.fl[self.fl_equal] = 1
+
+            elif self.reg[reg_a] < self.reg[reg_b]:
+                self.fl[self.fl_lt] = 1
+
+            elif self.reg[reg_a] > self.reg[reg_b]:
+                self.fl[self.fl_gt] = 1
+
+            else:
+                self.fl[self.fl_lt] = 0
+                self.fl[self.fl_gt] = 0
+                self.fl[self.fl_equal] = 0
         else:
             raise Exception("Unsupported ALU operation")
 
@@ -168,11 +200,30 @@ class CPU:
         self.handle_POP(register, __)
         self.pc = self.reg[register]
 
+    def handle_JMP(self, register, _):
+        self.pc = self.reg[register]
+
+    def handle_JEQ(self, register, _):
+        if self.fl[self.fl_equal] == 1:
+            self.handle_JMP(register, _)
+        else:
+            self.pc += 2
+
+    def handle_JNE(self, register, _):
+        if self.fl[self.fl_equal] == 0:
+            self.handle_JMP(register, _)
+        else:
+            self.pc += 2
+
+    def handle_CMP(self, operand_a, operand_b):
+        self.alu(CMP, operand_a, operand_b)
+
     def run(self):
         """Run the CPU."""
+
         self.running = True
 
-        while True:
+        while self.running:
             opcode = self.ram_read(self.pc)
 
             inst_len = ((opcode & 0b11000000) >> 6) + 1
